@@ -80,8 +80,7 @@ class LoginWindow(QWidget):
         sidebar_widget.setLayout(sidebar)
 
         def side_btn(text):
-            btn = QPushButton(text)
-            return btn
+            return QPushButton(text)
 
         btn_add = side_btn("➕ Add Student")
         btn_scan = side_btn("📷 Scan QR")
@@ -120,12 +119,13 @@ class LoginWindow(QWidget):
         form.addWidget(self.input_class)
         form.addWidget(save)
 
-        # TABLE
+        # TABLE (UPGRADED 🔥)
         self.table = QTableWidget()
-        self.table.setColumnCount(3)
-        self.table.setHorizontalHeaderLabels(["ID", "Name", "Class"])
+        self.table.setColumnCount(5)
+        self.table.setHorizontalHeaderLabels(
+            ["ID", "Name", "Attended", "Total", "%"]
+        )
 
-        # DELETE BUTTON ✅
         delete_btn = QPushButton("❌ Delete Student")
         delete_btn.clicked.connect(self.delete_selected_student)
 
@@ -147,13 +147,29 @@ class LoginWindow(QWidget):
         add_student(self.input_name.text(), self.input_class.text())
         self.load_students()
 
+    # 🔥 UPDATED LOAD (WITH ATTENDANCE)
     def load_students(self):
-        data = get_students()
+        data = get_attendance_report()
+
         self.table.setRowCount(len(data))
 
         for r, row in enumerate(data):
-            for c, val in enumerate(row):
-                self.table.setItem(r, c, QTableWidgetItem(str(val)))
+            student_id, name, attended, total, percent = row
+
+            self.table.setItem(r, 0, QTableWidgetItem(str(student_id)))
+            self.table.setItem(r, 1, QTableWidgetItem(name))
+            self.table.setItem(r, 2, QTableWidgetItem(str(attended)))
+            self.table.setItem(r, 3, QTableWidgetItem(str(total)))
+
+            percent_item = QTableWidgetItem(f"{percent}%")
+
+            # 🔥 COLOR EFFECT
+            if percent < 75:
+                percent_item.setForeground(Qt.red)
+            else:
+                percent_item.setForeground(Qt.green)
+
+            self.table.setItem(r, 4, percent_item)
 
     def delete_selected_student(self):
         selected = self.table.currentRow()
@@ -167,13 +183,13 @@ class LoginWindow(QWidget):
         reply = QMessageBox.question(
             self,
             "Confirm Delete",
-            "Are you sure you want to delete this student?",
+            "Are you sure?",
             QMessageBox.Yes | QMessageBox.No
         )
 
         if reply == QMessageBox.Yes:
             delete_student(student_id)
-            QMessageBox.information(self, "Success", "Student deleted ✅")
+            QMessageBox.information(self, "Success", "Deleted ✅")
             self.load_students()
 
     def add_student_ui(self):
@@ -189,7 +205,7 @@ class LoginWindow(QWidget):
 
             if data:
                 mark_attendance(data)
-                QMessageBox.information(self, "Done", f"{data}")
+                QMessageBox.information(self, "Attendance Marked", f"ID: {data}")
                 break
 
             cv2.imshow("Scan", frame)
@@ -199,28 +215,30 @@ class LoginWindow(QWidget):
         cap.release()
         cv2.destroyAllWindows()
 
+        self.load_students()  # 🔥 refresh
+
     def show_report(self):
-        data, total = get_attendance_report()
+        data = get_attendance_report()
+
         text = ""
 
-        for _, name, present in data:
-            percent = (present / total * 100) if total else 0
-            text += f"{name}: {percent:.2f}%\n"
+        for _, name, attended, total, percent in data:
+            text += f"{name} → {attended}/{total} ({percent}%)\n"
 
-        QMessageBox.information(self, "Report", text)
+        QMessageBox.information(self, "Full Report", text)
 
     def show_graph(self):
-        data, total = get_attendance_report()
+        data = get_attendance_report()
 
         names = []
         perc = []
 
-        for _, name, present in data:
-            percent = (present / total * 100) if total else 0
+        for _, name, attended, total, percent in data:
             names.append(name)
             perc.append(percent)
 
         plt.bar(names, perc)
+        plt.title("Attendance %")
         plt.show()
 
 
