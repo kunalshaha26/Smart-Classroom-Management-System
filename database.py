@@ -79,6 +79,7 @@ def mark_attendance(student_id):
 
     today = datetime.now().strftime("%Y-%m-%d")
 
+    # Avoid duplicate attendance
     cursor.execute("SELECT * FROM attendance WHERE student_id=? AND date=?", (student_id, today))
     result = cursor.fetchone()
 
@@ -89,43 +90,81 @@ def mark_attendance(student_id):
     conn.close()
 
 
-# 🔹 Attendance Report (FIXED POSITION ✅)
+# 🔹 NEW: Individual Student Summary 🔥
+def get_student_summary(student_id):
+    conn = sqlite3.connect("scms.db")
+    cursor = conn.cursor()
+
+    # Total classes conducted
+    cursor.execute("SELECT COUNT(DISTINCT date) FROM attendance")
+    total_classes = cursor.fetchone()[0]
+
+    # Classes attended by student
+    cursor.execute("SELECT COUNT(*) FROM attendance WHERE student_id=?", (student_id,))
+    attended = cursor.fetchone()[0]
+
+    conn.close()
+
+    percentage = (attended / total_classes * 100) if total_classes > 0 else 0
+
+    return total_classes, attended, round(percentage, 2)
+
+
+# 🔹 Attendance Report (UPGRADED 🔥)
 def get_attendance_report():
     conn = sqlite3.connect("scms.db")
     cursor = conn.cursor()
 
+    # Total classes conducted
+    cursor.execute("SELECT COUNT(DISTINCT date) FROM attendance")
+    total_days = cursor.fetchone()[0]
+
     cursor.execute("""
     SELECT students.id, students.name,
-           COUNT(attendance.id) as present_days
+           COUNT(attendance.id) as attended
     FROM students
     LEFT JOIN attendance
     ON students.id = attendance.student_id
     GROUP BY students.id
     """)
 
-    data = cursor.fetchall()
+    raw_data = cursor.fetchall()
 
-    # 🔥 Get total days
-    cursor.execute("SELECT COUNT(DISTINCT date) FROM attendance")
-    total_days = cursor.fetchone()[0]
+    final_data = []
+
+    for row in raw_data:
+        student_id, name, attended = row
+
+        percentage = (attended / total_days * 100) if total_days > 0 else 0
+
+        final_data.append((
+            student_id,
+            name,
+            attended,
+            total_days,
+            round(percentage, 2)
+        ))
 
     conn.close()
 
-    return data, total_days
+    return final_data
+
+
+# 🔹 Delete Student
 def delete_student(student_id):
     conn = sqlite3.connect("scms.db")
     cursor = conn.cursor()
 
-    # 🔥 Delete attendance first (important)
+    # Delete attendance first
     cursor.execute("DELETE FROM attendance WHERE student_id=?", (student_id,))
 
-    # 🔥 Delete student
+    # Delete student
     cursor.execute("DELETE FROM students WHERE id=?", (student_id,))
 
     conn.commit()
     conn.close()
 
-    # 🔥 Delete QR file
+    # Delete QR file
     qr_path = f"qrcodes/student_{student_id}.png"
     if os.path.exists(qr_path):
         os.remove(qr_path)
